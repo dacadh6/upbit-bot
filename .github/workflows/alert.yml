@@ -2,9 +2,9 @@ name: Upbit Price Alert
 
 on:
   schedule:
-    # 매시 정각마다 실행 (1시간 간격)
-    - cron: '0 * * * *'
-  workflow_dispatch: # 직접 수동 실행 가능 옵션
+    # 테스트용: 매시 45분에 실행
+    - cron: '45 * * * *'
+  workflow_dispatch:
 
 jobs:
   alert:
