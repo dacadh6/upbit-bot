@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
-from flask import Flask, Response
+from flask import Flask
 import requests
 
 app = Flask(__name__)
@@ -43,7 +43,13 @@ def run_alert():
         return
 
     kst = timezone(timedelta(hours=9))
-    current_hour = datetime.now(kst).hour
+    now = datetime.now(kst)
+
+    # 10분마다 호출되지만, 정각(00분~09분)에 호출된 경우에만 텔레그램 알림 실행
+    if now.minute >= 10:
+        return
+
+    current_hour = now.hour
     is_silent = current_hour >= 23 or current_hour <= 8
 
     tickers = ["KRW-KERNEL"]
@@ -92,7 +98,6 @@ def run_alert():
 @app.route("/")
 def index():
     run_alert()
-    # 204 No Content: 데이터 본문(Body)을 전혀 보내지 않는 완벽한 공백 응답
     return "", 204
 
 
