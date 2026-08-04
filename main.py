@@ -2,11 +2,18 @@ import os
 import requests
 from datetime import datetime, timezone, timedelta
 
-def get_upbit_price(ticker):
+def get_upbit_ticker_details(ticker):
+    """
+    현재가뿐만 아니라 High(고가), Low(저가) 정보도 함께 가져옵니다.
+    """
     url = f"https://api.upbit.com/v1/ticker?markets={ticker}"
     response = requests.get(url).json()
     if isinstance(response, list) and len(response) > 0:
-        return response[0]['trade_price']
+        return {
+            'trade_price': response[0]['trade_price'],  # 현재가
+            'high_price': response[0]['high_price'],    # 최근 24시간 최고가
+            'low_price': response[0]['low_price']       # 최근 24시간 최저가
+        }
     return None
 
 def send_telegram_message(token, chat_id, message, disable_notification=False):
@@ -27,39 +34,47 @@ if __name__ == "__main__":
     kst = timezone(timedelta(hours=9))
     current_hour = datetime.now(kst).hour
 
-    # 23시 ~ 08시 무음 설정
+    # 23시 ~ 08시 무음 설정 (23, 0, 1, 2, 3, 4, 5, 6, 7, 8시)
     is_silent = (current_hour >= 23 or current_hour <= 8)
 
-    # 조회할 코인 목록 (KERNEL 추가)
     tickers = ["KRW-KERNEL"]
     
-    # 🎯 KERNEL 코인 감시 목표 가격 설정
     TARGET_COIN = "KRW-KERNEL"
-    TARGET_PRICES = [50.2, 40.0]
+    HIGH_TARGET = 45.6  # 이상 도달 목표가
+    LOW_TARGET = 40.0   # 이하 도달 목표가
     
     target_alerts = []
     msg_lines = ["📊 **[업비트 실시간 시세 알림]**\n"]
 
     for ticker in tickers:
-        price = get_upbit_price(ticker)
-        if price is None:
+        data = get_upbit_ticker_details(ticker)
+        if data is None:
             continue
             
         coin_name = ticker.split("-")[1]
+        price = data['trade_price']
         msg_lines.append(f"• **{coin_name}**: {price:,}원")
         
-        # KERNEL 코인이 목표 가격에 도달했는지 체크
+        # KERNEL 코인이 목표가 범위를 터치했는지 검사
         if ticker == TARGET_COIN:
-            for target_p in TARGET_PRICES:
-                # 목표 가격 근처(이하)에 도달한 경우 경보 생성
-                if price <= target_p:
-                    target_alerts.append(f"🚨 **[{coin_name} 목표가 {target_p}원 도달!]** 현재가: {price:,}원")
+            high_price = data['high_price']
+            low_price = data['low_price']
+            
+            # 1. 50.2원 이상에 도달한 적이 있는지 (고가 기준)
+            if high_price >= HIGH_TARGET:
+                target_alerts.append(f"🚀 **[KERNEL] 50.2원 이상 터치함!** (최고가: {high_price:,}원 / 현재가: {price:,}원)")
+                
+            # 2. 40.0원 이하로 내려간 적이 있는지 (저가 기준)
+            if low_price <= LOW_TARGET:
+                target_alerts.append(f"🚨 **[KERNEL] 40.0원 이하 터치함!** (최저가: {low_price:,}원 / 현재가: {price:,}원)")
 
-    # 목표가 경보 메시지가 있는 경우 맨 위에 표시
-    prefix_msg = ""
+    # 멘트 구성
+    hourly_msg = "\n".join(msg_lines)
+    
     if target_alerts:
-        prefix_msg = "\n".join(target_alerts) + "\n\n"
-
-    final_message = prefix_msg + "\n".join(msg_lines)
+        alert_header = "\n".join(target_alerts)
+        final_message = f"{alert_header}\n\n{hourly_msg}"
+    else:
+        final_message = hourly_msg
     
     send_telegram_message(token, chat_id, final_message, disable_notification=is_silent)
