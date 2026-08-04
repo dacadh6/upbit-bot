@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta, timezone
 import os
+from datetime import datetime, timedelta, timezone
 from flask import Flask, Response
 import requests
 
@@ -7,7 +7,6 @@ app = Flask(__name__)
 
 
 def get_upbit_ticker_details(ticker):
-    """현재가뿐만 아니라 High(고가), Low(저가) 정보도 함께 가져옵니다."""
     url = f"https://api.upbit.com/v1/ticker?markets={ticker}"
     try:
         response = requests.get(url, timeout=5).json()
@@ -37,7 +36,6 @@ def send_telegram_message(token, chat_id, message, disable_notification=False):
 
 
 def run_alert():
-    """메인 알림 로직"""
     token = os.environ.get("TELEGRAM_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -94,8 +92,8 @@ def run_alert():
 @app.route("/")
 def index():
     run_alert()
-    # Cron-job.org가 좋아하는 가장 짧은 경량 응답 반환
-    return Response("OK", status=200, mimetype="text/plain")
+    # 204 No Content: 데이터 본문(Body)을 전혀 보내지 않는 완벽한 공백 응답
+    return "", 204
 
 
 if __name__ == "__main__":
