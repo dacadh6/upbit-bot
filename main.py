@@ -40,7 +40,7 @@ if __name__ == "__main__":
     tickers = ["KRW-KERNEL"]
     
     TARGET_COIN = "KRW-KERNEL"
-    HIGH_TARGET = 45.6  # 이상 도달 목표가
+    HIGH_TARGET = 50.2  # 이상 도달 목표가
     LOW_TARGET = 40.0   # 이하 도달 목표가
     
     target_alerts = []
