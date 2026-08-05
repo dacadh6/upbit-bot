@@ -6,16 +6,21 @@ import requests
 app = Flask(__name__)
 
 
-def get_upbit_ticker_details(ticker):
-    url = f"https://api.upbit.com/v1/ticker?markets={ticker}"
+def get_upbit_ticker_details(tickers):
+    ticker_str = ",".join(tickers)
+    url = f"https://api.upbit.com/v1/ticker?markets={ticker_str}"
     try:
         response = requests.get(url, timeout=5).json()
         if isinstance(response, list) and len(response) > 0:
-            return {
-                "trade_price": response[0]["trade_price"],
-                "high_price": response[0]["high_price"],
-                "low_price": response[0]["low_price"],
-            }
+            result = {}
+            for item in response:
+                result[item["market"]] = {
+                    "trade_price": item["trade_price"],
+                    "high_price": item["high_price"],
+                    "low_price": item["low_price"],
+                    "signed_change_rate": item["signed_change_rate"],
+                }
+            return result
     except Exception as e:
         print(f"Upbit API Error: {e}")
     return None
@@ -45,29 +50,47 @@ def run_alert():
     kst = timezone(timedelta(hours=9))
     now = datetime.now(kst)
 
-    # 10분마다 호출되지만, 정각(00분~09분)에 호출된 경우에만 텔레그램 알림 실행
-    if now.minute >= 10:
+    current_hour = now.hour
+    current_minute = now.minute
+
+    # ----------------------------------------------------
+    # [알림 주기 제어]
+    # - 09:00 ~ 10:00 사이: 10분마다 알림 발송
+    # - 그 외 시간: 정각(00분~09분)에만 1시간 간격 알림 발송
+    # ----------------------------------------------------
+    is_frequent_time = (current_hour == 9) or (current_hour == 10 and current_minute < 10)
+
+    if not is_frequent_time and current_minute >= 10:
         return
 
-    current_hour = now.hour
+    # 야간 무음 설정 (23시 ~ 08시)
     is_silent = current_hour >= 23 or current_hour <= 8
 
-    tickers = ["KRW-KERNEL"]
+    tickers = ["KRW-KERNEL", "KRW-BTC"]
     TARGET_COIN = "KRW-KERNEL"
     HIGH_TARGET = 50.2
     LOW_TARGET = 40.0
+
+    ticker_data = get_upbit_ticker_details(tickers)
+    if not ticker_data:
+        return
 
     target_alerts = []
     msg_lines = ["📊 **[업비트 실시간 시세 알림]**\n"]
 
     for ticker in tickers:
-        data = get_upbit_ticker_details(ticker)
-        if data is None:
+        data = ticker_data.get(ticker)
+        if not data:
             continue
 
         coin_name = ticker.split("-")[1]
         price = data["trade_price"]
-        msg_lines.append(f"• **{coin_name}**: {price:,}원")
+        change_rate = data["signed_change_rate"] * 100
+
+        rate_str = f"{change_rate:+.2f}%"
+
+        # 모든 코인에 등락률 표시
+        msg_lines.append(f"• **{coin_name}**: {price:,}원 ({rate_str})")
 
         if ticker == TARGET_COIN:
             high_price = data["high_price"]
